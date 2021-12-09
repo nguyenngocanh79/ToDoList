@@ -6,25 +6,18 @@ import androidx.lifecycle.ViewModelProvider;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
-import android.content.Intent;
 import android.os.Bundle;
-import android.os.CountDownTimer;
+import android.os.Handler;
 import android.util.Log;
-import android.view.View;
-import android.widget.Button;
-import android.widget.EditText;
-import android.widget.TextView;
 import android.widget.Toast;
 
 import com.example.todolist.R;
 import com.example.todolist.database.NoteEntity;
+import com.example.todolist.viewmodel.LoadMore;
 import com.example.todolist.viewmodel.NoteViewModel;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Date;
 import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
@@ -32,18 +25,23 @@ public class MainActivity extends AppCompatActivity {
 
     FloatingActionButton mInsertFAB;
     NoteViewModel noteViewModel;
-    List<NoteEntity> mNoteEntities;
+//    Long mListNoteSize;
+//    List<NoteEntity> mNoteEntities;
 //    Button mBtnDelete,mBtnUpdate, mBtnInsert;
 //    TextView mText;
 //    EditText mEditTitle, mEditDescription;
 
     RecyclerView mRcvNote;
-    NoteAdapter mNoteAdapter;
-    int mCurrentPage = 1;
-    int mTotalPage = 1;
-    boolean mLoading = false;
-    boolean mLastPage = false;
+    NoteAdapter01 mNoteAdapter;
+//    int mCurrentPage = 1;
+    final int mNotePerPage = 5;
+//    int mTotalPage = 4;
+//    boolean mLoading = false;
+//    boolean mLastPage = false;
 
+    enum ChangeType {LOAD, DELETE, INSERT, UPDATE}
+
+    ChangeType changeType = ChangeType.LOAD;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -56,168 +54,104 @@ public class MainActivity extends AppCompatActivity {
 //        mEditTitle = findViewById(R.id.editTitle);
 //        mEditDescription = findViewById(R.id.editDescription);
 
+        Log.d("BBB", "onCreate: ");
+        noteViewModel = new ViewModelProvider(this, new NoteViewModel.NoteViewModelFactory(getApplication())).get(NoteViewModel.class);
         mInsertFAB = findViewById(R.id.idFAB);
 
         mRcvNote = findViewById(R.id.recyclerView);
-        mNoteEntities = new ArrayList<>();
-//        mNoteEntities = getMock();
-        mNoteAdapter = new NoteAdapter(mNoteEntities);
+        mNoteAdapter = new NoteAdapter01();
+        mNoteAdapter.updateListNote(noteViewModel.loadMore.mNoteEntities,noteViewModel.loadMore.mNoteEntities);
         mRcvNote.setLayoutManager(new LinearLayoutManager(this));
         mRcvNote.setHasFixedSize(true);
         mRcvNote.setAdapter(mNoteAdapter);
-
-
-        noteViewModel = new ViewModelProvider(this,new NoteViewModel.NoteViewModelFactory(getApplication())).get(NoteViewModel.class);
-
+        mRcvNote.scrollToPosition(noteViewModel.loadMore.lastFirstVisiblePosition);
 
         //observe data
         noteViewModel.getListNote().observe(this, new Observer<List<NoteEntity>>() {
             @Override
             public void onChanged(List<NoteEntity> noteEntities) {
-//                mNoteAdapter.updateList(noteEntities);
+                switch (changeType) {
+                    case LOAD:
+                        //Nếu mới xoay màn hình thì không dùng phần dữ liệu có sẵn trong noteEntities
+                        if(noteViewModel.loadMore.rotation == LoadMore.StartRotation.START_ROTATION ){
+                            noteViewModel.loadMore.rotation = LoadMore.StartRotation.STOP_ROTATION;
+                        } else {
+//                            if (noteViewModel.loadMore.mCurrentPage > 1) {//Không cần kiểm tra, đã kiểm tra ở hàm mNoteAdapter.removeLoading();
+//                                mNoteAdapter.removeLoading();
+//                            }
+//                            mNoteAdapter.removeLoading();
+                            removeLoading();
+                            noteViewModel.loadMore.mNoteEntities.addAll(noteEntities);
+                            mNoteAdapter.updateListNote(noteViewModel.loadMore.mNoteEntities,noteEntities);
+                            noteViewModel.loadMore.mLoading = false;
+                            if(noteEntities.size()==0) {//Nếu hết data
+                                Toast.makeText(MainActivity.this, "No more data", Toast.LENGTH_SHORT).show();
+                            }
+                        }
 
-                mNoteEntities.clear();
-                mNoteEntities.addAll(noteEntities);
-                if(mCurrentPage == 1) {addFooter();}
-                mNoteAdapter.notifyDataSetChanged();
-                Log.d("BBB", "Current page: "+ mCurrentPage + "; Số item: "+noteEntities.size());
+                        break;
+                    case DELETE:
+                        break;
+                }
             }
         });
 
-        noteViewModel.getIdUpdate().observe(this, new Observer<Integer>() {
-            @Override
-            public void onChanged(Integer integer) {
-                Log.d("BBB","Id update " + integer);
-            }
-        });
+        // call data nếu chưa có dữ liệu (chỉ gọi lúc mới mở app)
+        if(noteViewModel.loadMore.mNoteEntities.size()==0){
+            noteViewModel.queryGetListNote(mNotePerPage, 0);
+        }
 
-        noteViewModel.getIdInsert().observe(this, new Observer<Long>() {
-            @Override
-            public void onChanged(Long aLong) {
-                Log.d("BBB","Id insert " + aLong);
-            }
-        });
-
-        // call data
-        noteViewModel.queryGetListNote();
-
-        //Insert Note
-        mInsertFAB.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                Intent intent = new Intent(MainActivity.this, InsertEditNoteActivity.class);
-                startActivity(intent);
-//                finish();
-            }
-        });
-
-        //Update note (click vào item)
-        mNoteAdapter.setOnClickItemListener(new NoteClickInterface() {
-            @Override
-            public void onNoteClick(NoteEntity noteEntity) {
-                Intent intent = new Intent(MainActivity.this, InsertEditNoteActivity.class);
-                intent.putExtra("noteType", "Edit");
-                intent.putExtra("noteTitle", noteEntity.getTitle());
-                intent.putExtra("noteDescription", noteEntity.getDescription());
-                intent.putExtra("noteId", noteEntity.getId());
-                startActivity(intent);
-            }
-        });
-
-        //Delete
-        mNoteAdapter.setOnDeleteItemListener(new NoteClickDeleteInterface() {
-            @Override
-            public void onDeleteIconClick(NoteEntity noteEntity) {
-                Toast.makeText(
-                        MainActivity.this,
-                        "Xóa thẻ " + noteEntity.getTitle(),
-                        Toast.LENGTH_SHORT)
-                        .show();
-//                mListFood.remove(mListFood.get(position));
-//                mFoodAdapter.notifyItemRemoved(position);
-                noteViewModel.deletedNote(noteEntity);
-            }
-        });
 
         //Scroll recyclerView
         mRcvNote.addOnScrollListener(new PaginationScrollListener((LinearLayoutManager) mRcvNote.getLayoutManager()) {
             @Override
             public void loadMoreItem() {
-                mLoading = true;
-                mCurrentPage +=1;
-
-                loadNextPage();
+                noteViewModel.loadMore.mLoading = true;
+                noteViewModel.loadMore.mCurrentPage += 1;
+                addFooter();
+                new Handler().postDelayed(new Runnable() {
+                    @Override
+                    public void run() {
+                        changeType = ChangeType.LOAD;
+                        noteViewModel.queryGetListNote(mNotePerPage, (noteViewModel.loadMore.mCurrentPage-1)*mNotePerPage);
+                    }
+                },3000);
+//                loadNextPage();
             }
 
             @Override
             public boolean isLoading() {
-                return mLoading;
+                return noteViewModel.loadMore.mLoading;
             }
 
             @Override
             public boolean isLastPage() {
-                return mLastPage;
+                return noteViewModel.loadMore.mLastPage;
             }
         });
 
-//        //Insert thủ công
-//        noteViewModel.insertNote(new NoteEntity("Work 5",
-//                        "Do 5",
-//                new SimpleDateFormat("dd MMM, yyyy - HH:mm").format(new Date())));
-
-//        //Insert data
-//        mBtnInsert.setOnClickListener(new View.OnClickListener() {
-//            @Override
-//            public void onClick(View view) {
-//                noteViewModel.insertNote(new NoteEntity(mEditTitle.getText().toString(),
-//                        mEditDescription.getText().toString(),
-//                new SimpleDateFormat("dd MMM, yyyy - HH:mm").format(new Date())));
-//            }
-//        });
-//
-//        //Delete data
-//        mBtnDelete.setOnClickListener(new View.OnClickListener() {
-//            @Override
-//            public void onClick(View v) {
-//                noteViewModel.deletedNote(mNoteEntities.get(mNoteEntities.size() - 1));
-//            }
-//        });
-//
-//        //Update data
-//        mBtnUpdate.setOnClickListener(new View.OnClickListener() {
-//            @Override
-//            public void onClick(View v) {
-//                NoteEntity noteEntity = mNoteEntities.get(mNoteEntities.size() - 1);
-//                noteEntity.setDescription("Do something 3.1");
-//                noteEntity.setTitle("Work 3.1");
-//                noteEntity.setTimestamp(new SimpleDateFormat("dd MMM, yyyy - HH:mm").format(new Date()));
-//                noteViewModel.updateNote(noteEntity);
-//            }
-//        });
-
     }
 
-    private void addFooter(){
-        if (mCurrentPage < mTotalPage){
-            mNoteAdapter.addFooterLoading();
-        }else{
-            mLastPage = true;
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        noteViewModel.loadMore.lastFirstVisiblePosition = ((LinearLayoutManager)mRcvNote.getLayoutManager()).findFirstCompletelyVisibleItemPosition();
+        noteViewModel.loadMore.rotation = LoadMore.StartRotation.START_ROTATION;
+
+        Log.d("BBB", "onDestroy: ");
+    }
+
+
+
+    private void addFooter() {
+        if (!noteViewModel.loadMore.mLastPage) {
+//            mNoteAdapter.addFooterLoading();
+            addFooterLoading();
         }
     }
 
-    private void loadNextPage(){
-//        if (mCurrentPage > 1){
-//            mNoteAdapter.removeLoading();
-//        }
-//        mNoteEntities.addAll(getMock());
-//        mNoteAdapter.notifyDataSetChanged();
-//        mLoading = false;
-//
-//        addFooter();
-    }
-
-//    private void loadNextPage(){
-//        new CountDownTimer(2000 , 2000) {
+    private void loadNextPage() {
+//        new CountDownTimer(1000, 800) {
 //            @Override
 //            public void onTick(long l) {
 //
@@ -225,28 +159,47 @@ public class MainActivity extends AppCompatActivity {
 //
 //            @Override
 //            public void onFinish() {
-////                Log.d("BBB","Trang: " + mCurrentPage + "");
-//                if (mCurrentPage > 1){
-//                    mNoteAdapter.removeLoading();
+//                Long idMax;
+//                if (mCurrentPage == 1) {
+//                    idMax = Long.MAX_VALUE;
+//                } else {
+//                    idMax = mNoteEntities
+//                            .get(mNoteEntities.size() - 2)
+//                            .getId() - 1;
 //                }
-//                mNoteEntities.addAll(getMock());
-//                mNoteAdapter.notifyDataSetChanged();
-//                mLoading = false;
-//
-//                addFooter();
-//
+
+//                changeType = ChangeType.LOAD;
+//                noteViewModel.queryGetListNote(mNotePerPage, 0);
 //            }
 //        }.start();
-//    }
+        new Handler().postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                changeType = ChangeType.LOAD;
+                noteViewModel.queryGetListNote(mNotePerPage, 0);
+            }
+        },1500);
 
-//    private List<NoteEntity> getMock(){
-//        return new ArrayList<>(Arrays.asList(
-//                new NoteEntity("W6", "D6","T6"),
-//                new NoteEntity("W7", "D7","T7"),
-//                new NoteEntity("W8", "D8","T8"),
-//                new NoteEntity("W9", "D9","T9"),
-//                new NoteEntity("W10", "D10","T10")
-//        ));
-//    }
+//        changeType = ChangeType.LOAD;
+//        noteViewModel.queryGetListNote(mNotePerPage, 0);
+
+    }
+
+
+    public void addFooterLoading() {
+        noteViewModel.loadMore.mNoteEntities.add(null);
+        mNoteAdapter.updateListNote(noteViewModel.loadMore.mNoteEntities,null);
+    }
+
+    //Nếu có item_loading thì xóa
+    public void removeLoading() {
+        if (noteViewModel.loadMore.mNoteEntities.size() > 0) {
+            int position = noteViewModel.loadMore.mNoteEntities.size() - 1;
+            if (noteViewModel.loadMore.mNoteEntities.get(position) == null) {
+                noteViewModel.loadMore.mNoteEntities.remove(position);
+            }
+        }
+    }
+
 
 }

@@ -1,6 +1,7 @@
 package com.example.todolist.viewmodel;
 
 import android.app.Application;
+import android.util.Log;
 
 import androidx.annotation.NonNull;
 import androidx.lifecycle.AndroidViewModel;
@@ -17,36 +18,82 @@ import java.util.List;
 import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers;
 import io.reactivex.rxjava3.core.CompletableObserver;
 import io.reactivex.rxjava3.core.MaybeObserver;
-import io.reactivex.rxjava3.core.Observer;
+import io.reactivex.rxjava3.core.SingleObserver;
 import io.reactivex.rxjava3.disposables.Disposable;
+import io.reactivex.rxjava3.functions.Consumer;
 import io.reactivex.rxjava3.schedulers.Schedulers;
 
 public class NoteViewModel extends AndroidViewModel {
-    private NoteRepository noteRepository;
+    public NoteRepository noteRepository;
+
+
     private MutableLiveData<List<NoteEntity>> listNote;
+    private MutableLiveData<Long> listNoteSize;
     private MutableLiveData<Long> idInsert;
     private MutableLiveData<Integer> idUpdate;
     private MutableLiveData<Boolean> isDeleted;
     private MutableLiveData<Throwable> error;
+    public LoadMore loadMore;
 
     public NoteViewModel(@NonNull Application application) {
         super(application);
         noteRepository = NoteRepository.getInstance(getApplication());
         listNote = new MutableLiveData<>();
+        listNoteSize = new MutableLiveData<>();
         idInsert = new MutableLiveData<>();
         idUpdate = new MutableLiveData<>();
         isDeleted = new MutableLiveData<>();
         error = new MutableLiveData<>();
+        loadMore = new LoadMore();
     }
 
-    public void queryGetListNote(){
-        noteRepository.getListNote()
+    public void queryGetListNote(int itemLimit, int itemOffset) {
+
+        noteRepository.getListNote(itemLimit, itemOffset)
                 .subscribeOn(Schedulers.io())
                 .observeOn(AndroidSchedulers.mainThread())
-                .subscribe(noteEntities -> listNote.setValue(noteEntities));
+                .subscribe(new Consumer<List<NoteEntity>>() {
+                    @Override
+                    public void accept(List<NoteEntity> noteEntities) throws Throwable {
+                        if (noteEntities.size() == 0) {
+                            loadMore.mLastPage = true;
+                        } else {
+//                            listNote.setValue(noteEntities);
+                        }
+//                        if(loadMore.mGetResultEnable){
+                            listNote.setValue(noteEntities);
+//                        }
+
+                    }
+                });
+
+
     }
 
-    public void insertNote(NoteEntity noteEntity){
+    public void queryGetListNoteSize() {
+        noteRepository.getListNoteSize()
+                .subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe(new SingleObserver<Long>() {
+                    @Override
+                    public void onSubscribe(@io.reactivex.rxjava3.annotations.NonNull Disposable d) {
+
+                    }
+
+                    @Override
+                    public void onSuccess(@io.reactivex.rxjava3.annotations.NonNull Long aLong) {
+                        listNoteSize.setValue(aLong);
+
+                    }
+
+                    @Override
+                    public void onError(@io.reactivex.rxjava3.annotations.NonNull Throwable e) {
+                        Log.d("BBB", "tải không thành công");
+                    }
+                });
+    }
+
+    public void insertNote(NoteEntity noteEntity) {
         noteRepository.insertNote(noteEntity) //Tạo ra Flowable (Observable)  ,ở io thread
                 .subscribeOn(Schedulers.io())
                 .observeOn(AndroidSchedulers.mainThread())
@@ -73,7 +120,7 @@ public class NoteViewModel extends AndroidViewModel {
                 });
     }
 
-    public void updateNote(NoteEntity noteEntity){
+    public void updateNote(NoteEntity noteEntity) {
         noteRepository.updateNote(noteEntity)
                 .subscribeOn(Schedulers.io())
                 .observeOn(AndroidSchedulers.mainThread())
@@ -100,7 +147,7 @@ public class NoteViewModel extends AndroidViewModel {
                 });
     }
 
-    public void deletedNote(NoteEntity noteEntity){
+    public void deletedNote(NoteEntity noteEntity) {
         noteRepository.delete(noteEntity)
                 .subscribeOn(Schedulers.io())
                 .observeOn(AndroidSchedulers.mainThread())
@@ -123,19 +170,27 @@ public class NoteViewModel extends AndroidViewModel {
     }
 
 
+    public LiveData<Long> getListNoteSize() {
+        return listNoteSize;
+    }
 
-    public LiveData<List<NoteEntity>> getListNote(){
+    public LiveData<List<NoteEntity>> getListNote() {
         return listNote;
     }
-    public LiveData<Long> getIdInsert(){
+
+//    public void setListNote(MutableLiveData<List<NoteEntity>> listNote) {
+//        this.listNote = listNote;
+//    }
+
+    public LiveData<Long> getIdInsert() {
         return idInsert;
     }
 
-    public LiveData<Integer> getIdUpdate(){
+    public LiveData<Integer> getIdUpdate() {
         return idUpdate;
     }
 
-    public LiveData<Boolean> getResultDeleted(){
+    public LiveData<Boolean> getResultDeleted() {
         return isDeleted;
     }
 
@@ -152,7 +207,7 @@ public class NoteViewModel extends AndroidViewModel {
         @NonNull
         @Override
         public <T extends ViewModel> T create(@NonNull Class<T> aClass) {
-            if (aClass.isAssignableFrom(NoteViewModel.class)){
+            if (aClass.isAssignableFrom(NoteViewModel.class)) {
                 return (T) new NoteViewModel(application);
             }
             throw new IllegalArgumentException("Unable to construct viewmodel");

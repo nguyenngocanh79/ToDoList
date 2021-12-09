@@ -11,6 +11,7 @@ import java.util.List;
 import io.reactivex.rxjava3.core.Completable;
 import io.reactivex.rxjava3.core.Maybe;
 import io.reactivex.rxjava3.core.Observable;
+import io.reactivex.rxjava3.core.Single;
 
 public class NoteRepository {
     private static NoteRepository instance = null;
@@ -27,9 +28,10 @@ public class NoteRepository {
         return instance;
     }
 
-    public Observable<List<NoteEntity>> getListNote(){
-        return noteDao.getListNote();
+    public Observable<List<NoteEntity>> getListNote( int itemLimit, int itemOffset){
+        return noteDao.getListNote(itemLimit, itemOffset);
     }
+    public Single<Long> getListNoteSize(){return noteDao.getListNoteSize();}
 
     public Maybe<Long> insertNote(NoteEntity noteEntity){
         return noteDao.insertNote(noteEntity);

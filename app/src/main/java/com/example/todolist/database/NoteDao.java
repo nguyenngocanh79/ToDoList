@@ -11,13 +11,23 @@ import java.util.List;
 import io.reactivex.rxjava3.core.Completable;
 import io.reactivex.rxjava3.core.Maybe;
 import io.reactivex.rxjava3.core.Observable;
+import io.reactivex.rxjava3.core.Single;
 
 @Dao
 public interface NoteDao {
 
 //    @Query("Select * from note limit 2")
-    @Query("Select * from note order by id desc")
-    Observable<List<com.example.todolist.database.NoteEntity>> getListNote();
+//    @Query("Select * from note " +
+//            "Where id <= :idMax " +
+//            "order by id desc limit :itemLimit")
+//    Observable<List<com.example.todolist.database.NoteEntity>> getListNote(Long idMax, int itemLimit);
+
+    @Query("Select * from note " +
+            "limit :itemLimit offset :itemOffset")
+    Observable<List<com.example.todolist.database.NoteEntity>> getListNote(int itemLimit, int itemOffset);
+
+    @Query("SELECT COUNT(*) FROM note")
+    Single<Long> getListNoteSize();
 
     @Insert
     Maybe<Long> insertNote(com.example.todolist.database.NoteEntity noteEntity);

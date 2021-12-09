@@ -17,7 +17,7 @@ import com.example.todolist.database.NoteEntity;
 import java.util.ArrayList;
 import java.util.List;
 
-public class NoteAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
+public class NoteAdapter01 extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
 
     private final int TYPE_ITEM = 0;
     private final int TYPE_LOADING = 1;
@@ -28,22 +28,28 @@ public class NoteAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
     NoteClickDeleteInterface noteClickDeleteInterface;
     NoteClickInterface noteClickInterface;
 
-    public NoteAdapter() {
+    public NoteAdapter01() {
         this.listNote = new ArrayList<>();
     }
 
-    public void updateListNote(List<NoteEntity> listNoteEntity) {
+    //Nên viết thêm: type: 1.change, 2.insert, 3.remove
+    public void updateListNote(List<NoteEntity> listNoteEntity,List<NoteEntity> addedList ) {
         if (listNote.size() > 0) {
             listNote.clear();
         }
 
         listNote.addAll(listNoteEntity);
-        notifyDataSetChanged();
+        if(addedList==null){
+            notifyItemInserted(listNote.size() - 1);
+        }else{
+            notifyDataSetChanged();
+        }
+
     }
 
     @Override
     public int getItemViewType(int position) {
-        if (position == listNote.size() - 1 && isLoading) {
+        if (position == listNote.size() - 1 && listNote.get(listNote.size() - 1)==null ) {
             return TYPE_LOADING;
         }
         return TYPE_ITEM;
